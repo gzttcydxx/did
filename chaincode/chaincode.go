@@ -4,10 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"did/models"
-
+	"github.com/gzttcydxx/did/models"
 	"github.com/hyperledger/fabric-contract-api-go/contractapi"
-	// "github.com/hyperledger/fabric/scripts/fabric-samples/did/models"
 )
 
 type SmartContract struct {
