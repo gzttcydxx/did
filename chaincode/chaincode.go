@@ -19,13 +19,17 @@ func (s *SmartContract) InitLedger(ctx contractapi.TransactionContextInterface) 
 }
 
 func (s *SmartContract) CreateIdentity(ctx contractapi.TransactionContextInterface, did string) error {
-	DID, err := models.Parse(did)
 	readIdentity, err := s.ReadIdentity(ctx, did)
 
-	if readIdentity != nil && readIdentity.Did == did {
+	if readIdentity != nil {
 		return fmt.Errorf("the identity %s already exists", did)
 	}
 
+	identity := models.DIDDoc{
+		Context: []string{"https://www.w3.org/ns/did/v1"},
+		ID:      did,
+	}
+
 	identityJSON, err := json.Marshal(identity)
 	if err != nil {
 		return err
@@ -34,42 +38,19 @@ func (s *SmartContract) CreateIdentity(ctx contractapi.TransactionContextInterfa
 	return ctx.GetStub().PutState(did, identityJSON)
 }
 
-func (s *SmartContract) ReadIdentity(ctx contractapi.TransactionContextInterface, did string) (*Identity, error) {
-	identityJSON, err := ctx.GetStub().GetState(did)
+func (s *SmartContract) ReadIdentity(ctx contractapi.TransactionContextInterface, did string) (*models.DIDDoc, error) {
+	DIDdocJSON, err := ctx.GetStub().GetState(did)
 	if err != nil {
 		return nil, err
 	}
-	if identityJSON == nil {
+	if DIDdocJSON == nil {
 		return nil, nil
 	}
 
-	var identity Identity
-	err = json.Unmarshal(identityJSON, &identity)
-	if err != nil {
-		return nil, err
-	}
+	var DIDdoc *models.DIDDoc
+	DIDdoc.UnmarshalJSON(DIDdocJSON)
 
-	return &identity, nil
-}
-
-func (s *SmartContract) UpdateIdentity(ctx contractapi.TransactionContextInterface, did string, didDoc DidDoc) error {
-	readIdentity, err := s.ReadIdentity(ctx, did)
-
-	if readIdentity == nil {
-		return fmt.Errorf("the identity %s does not exist", did)
-	}
-
-	identity := Identity{
-		Did:    did,
-		DidDoc: didDoc,
-	}
-
-	identityJSON, err := json.Marshal(identity)
-	if err != nil {
-		return err
-	}
-
-	return ctx.GetStub().PutState(did, identityJSON)
+	return DIDdoc, nil
 }
 
 func (s *SmartContract) DeleteIdentity(ctx contractapi.TransactionContextInterface, did string) error {

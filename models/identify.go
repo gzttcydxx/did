@@ -1,6 +1,7 @@
 package models
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"regexp"
@@ -98,21 +99,21 @@ func ParseDIDURL(didURL string) (*DIDURL, error) {
 type Context interface{}
 
 type VerificationMethod struct {
-	ID                 string
-	Type               string
-	Controller         string
-	Value              []byte
-	relativeURL        bool
-	PublicKeyMultibase string
+	ID                 string `json:"id,omitempty"`
+	Type               string `json:"type,omitempty"`
+	Controller         string `json:"controller,omitempty"`
+	Value              []byte `json:"value,omitempty"`
+	relativeURL        bool   `json:"-"`
+	PublicKeyMultibase string `json:"publicKeyMultibase,omitempty"`
 	// multibaseEncoding multibase.Encoding
 }
 
 type VerificationRelationship int
 
 type Verification struct {
-	VerificationMethod VerificationMethod
-	Relationship       VerificationRelationship
-	Embedded           bool
+	VerificationMethod VerificationMethod       `json:"verificationMethod,omitempty"`
+	Relationship       VerificationRelationship `json:"relationship,omitempty"`
+	Embedded           bool                     `json:"embedded,omitempty"`
 }
 
 type Proof struct {
@@ -124,10 +125,6 @@ type Proof struct {
 	Nonce        []byte
 	ProofPurpose string
 	relativeURL  bool
-}
-
-type processingMeta struct {
-	baseURI string
 }
 
 type DIDDoc struct {
@@ -143,7 +140,6 @@ type DIDDoc struct {
 	Created              *time.Time
 	Updated              *time.Time
 	Proof                []Proof
-	processingMeta       processingMeta
 }
 
 type rawDIDDoc struct {
@@ -151,7 +147,6 @@ type rawDIDDoc struct {
 	ID                   string                   `json:"id,omitempty"`
 	AlsoKnownAs          []interface{}            `json:"alsoKnownAs,omitempty"`
 	VerificationMethod   []map[string]interface{} `json:"verificationMethod,omitempty"`
-	PublicKey            []map[string]interface{} `json:"publicKey,omitempty"`
 	Authentication       []interface{}            `json:"authentication,omitempty"`
 	AssertionMethod      []interface{}            `json:"assertionMethod,omitempty"`
 	CapabilityDelegation []interface{}            `json:"capabilityDelegation,omitempty"`
@@ -160,4 +155,218 @@ type rawDIDDoc struct {
 	Created              *time.Time               `json:"created,omitempty"`
 	Updated              *time.Time               `json:"updated,omitempty"`
 	Proof                []interface{}            `json:"proof,omitempty"`
+}
+
+// UnmarshalJSON unmarshals a DID Document.
+func (doc *DIDDoc) UnmarshalJSON(data []byte) error {
+	_doc, err := ParseDocument(data)
+	if err != nil {
+		return fmt.Errorf("failed to parse did doc: %w", err)
+	}
+
+	*doc = *_doc
+
+	return nil
+}
+
+func ParseDocument(data []byte) (*DIDDoc, error) {
+	var raw rawDIDDoc
+
+	err := json.Unmarshal(data, &raw)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal did doc: %w", err)
+	}
+
+	doc := &DIDDoc{
+		Context:              raw.Context,
+		ID:                   raw.ID,
+		AlsoKnownAs:          any2Array(raw.AlsoKnownAs),
+		Authentication:       any2Verification(raw.Authentication),
+		AssertionMethod:      any2Verification(raw.AssertionMethod),
+		CapabilityDelegation: any2Verification(raw.CapabilityDelegation),
+		CapabilityInvocation: any2Verification(raw.CapabilityInvocation),
+		KeyAgreement:         any2Verification(raw.KeyAgreement),
+		Created:              raw.Created,
+		Updated:              raw.Updated,
+		Proof:                any2Proof(raw.Proof),
+	}
+
+	for _, vm := range raw.VerificationMethod {
+		verificationMethod, err := parseVerificationMethod(vm)
+		if err != nil {
+			return nil, err
+		}
+
+		doc.VerificationMethod = append(doc.VerificationMethod, *verificationMethod)
+	}
+
+	return doc, nil
+}
+
+func parseVerificationMethod(vm map[string]interface{}) (*VerificationMethod, error) {
+	id := any2String(vm["id"])
+	if id == "" {
+		return nil, fmt.Errorf("id is required")
+	}
+
+	relativeURL := false
+
+	if strings.HasPrefix(id, "#") {
+		relativeURL = true
+	}
+
+	return &VerificationMethod{
+		ID:                 id,
+		Type:               any2String(vm["type"]),
+		Controller:         any2String(vm["controller"]),
+		Value:              any2Bytes(vm["value"]),
+		relativeURL:        relativeURL,
+		PublicKeyMultibase: any2String(vm["publicKeyMultibase"]),
+	}, nil
+}
+
+func any2Verification(i interface{}) []Verification {
+	if i == nil {
+		return nil
+	}
+
+	is, ok := i.([]interface{})
+	if !ok {
+		return nil
+	}
+
+	var result []Verification
+
+	for _, e := range is {
+		if e != nil {
+			result = append(result, any2VerificationElement(e))
+		}
+	}
+
+	return result
+}
+
+func any2VerificationElement(i interface{}) Verification {
+	switch e := i.(type) {
+	case map[string]interface{}:
+		vm, err := parseVerificationMethod(e)
+		if err != nil {
+			return Verification{}
+		}
+
+		return Verification{
+			VerificationMethod: *vm,
+		}
+	case string:
+		return Verification{
+			VerificationMethod: VerificationMethod{
+				ID: e,
+			},
+		}
+	default:
+		return Verification{}
+	}
+}
+
+func any2Proof(i interface{}) []Proof {
+	if i == nil {
+		return nil
+	}
+
+	is, ok := i.([]interface{})
+	if !ok {
+		return nil
+	}
+
+	var result []Proof
+
+	for _, e := range is {
+		if e != nil {
+			result = append(result, any2ProofElement(e))
+		}
+	}
+
+	return result
+}
+
+func any2ProofElement(i interface{}) Proof {
+	switch e := i.(type) {
+	case map[string]interface{}:
+		return Proof{
+			Type:         any2String(e["type"]),
+			Created:      any2Time(e["created"]),
+			Creator:      any2String(e["creator"]),
+			ProofValue:   any2Bytes(e["proofValue"]),
+			Domain:       any2String(e["domain"]),
+			Nonce:        any2Bytes(e["nonce"]),
+			ProofPurpose: any2String(e["proofPurpose"]),
+			relativeURL:  false,
+		}
+	default:
+		return Proof{}
+	}
+}
+
+func any2Time(i interface{}) *time.Time {
+	if i == nil {
+		return nil
+	}
+
+	switch e := i.(type) {
+	case string:
+		t, err := time.Parse(time.RFC3339, e)
+		if err != nil {
+			return nil
+		}
+
+		return &t
+	default:
+		return nil
+	}
+}
+
+func any2Bytes(i interface{}) []byte {
+	if i == nil {
+		return nil
+	}
+
+	switch e := i.(type) {
+	case string:
+		return []byte(e)
+	default:
+		return nil
+	}
+}
+
+func any2String(i interface{}) string {
+	if i == nil {
+		return ""
+	}
+
+	if e, ok := i.(string); ok {
+		return e
+	}
+
+	return ""
+}
+
+func any2Array(i interface{}) []string {
+	if i == nil {
+		return nil
+	}
+
+	is, ok := i.([]interface{})
+	if !ok {
+		return nil
+	}
+
+	var result []string
+
+	for _, e := range is {
+		if e != nil {
+			result = append(result, any2String(e))
+		}
+	}
+
+	return result
 }
