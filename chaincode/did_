@@ -45,7 +45,7 @@ const (
 	jsonldPriority      = "priority"
 	jsonldController    = "controller"
 	jsonldOwner         = "owner"
-
+	y
 	jsonldCreator        = "creator"
 	jsonldCreated        = "created"
 	jsonldProofValue     = "proofValue"
