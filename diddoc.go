@@ -1,4 +1,4 @@
-package models
+package main
 
 type Context []string
 
