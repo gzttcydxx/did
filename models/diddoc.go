@@ -3,10 +3,11 @@ package models
 type Context []string
 
 type DIDDoc struct {
-	Context            Context `json:"@context"`
-	ID                 DID     `json:"id"`
-	AlsoKnownAs        DID     `json:"alsoKnownAs"`
-	VerificationMethod []VerificationMethod
+	Context     Context `json:"@context"`
+	ID          DID     `json:"id"`
+	AlsoKnownAs DID     `json:"alsoKnownAs"`
+	Key         []Key
+	// VerificationMethod []VerificationMethod
 	// Created              *time.Time
 	// Updated              *time.Time
 	// Proof                []Proof
@@ -17,11 +18,19 @@ func NewDIDDoc(did DID, publicKey, privateKey string) (*DIDDoc, error) {
 		Context: []string{"https://www.w3.org/ns/did/v1", "https://w3id.org/security/suites/ed25519-2018/v1"},
 		ID:      did,
 	}
-	vm, err := NewVerificationMethod(did, publicKey, privateKey)
+
+	// vm, err := NewVerificationMethod(did, publicKey, privateKey)
+	// if err != nil {
+	// 	return nil, err
+	// }
+	// diddoc.VerificationMethod = append(diddoc.VerificationMethod, *vm)
+
+	k, err := NewKey(did, publicKey, privateKey)
 	if err != nil {
 		return nil, err
 	}
-	diddoc.VerificationMethod = append(diddoc.VerificationMethod, *vm)
+	diddoc.Key = append(diddoc.Key, *k)
+
 	return diddoc, nil
 }
 
