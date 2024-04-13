@@ -1,4 +1,4 @@
-package main
+package models
 
 // type Service struct {
 // 	ID                       string                 `json:"id"`
