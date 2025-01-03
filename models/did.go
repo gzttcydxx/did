@@ -3,11 +3,11 @@ package models
 import "strings"
 
 type DID struct {
-	Scheme     string `json:"scheme" required:"false" default:"did"`
-	Method     string `json:"method" required:"false" default:"ethr"`
-	ChainID    string `json:"chain_id" required:"false" default:"1"`
-	SpecificID string `json:"specific_id" required:"false" default:"0x1234567890"`
-	Fragment   string `json:"fragment" required:"false" default:"#1234567890"`
+	Scheme     string `json:"scheme" required:"false"`
+	Method     string `json:"method" required:"false"`
+	ChainID    string `json:"chain_id" required:"false"`
+	SpecificID string `json:"specific_id" required:"false"`
+	Fragment   string `json:"fragment" required:"false"`
 }
 
 func (d *DID) ToString() string {
